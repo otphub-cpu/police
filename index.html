@@ -109,16 +109,7 @@
     </div>
 
     <!-- Ambient Cyber Police Radar & Crime Grid Background -->
-    <div class="ambient-bg">
-        <div class="orb orb-1"></div>
-        <div class="orb orb-2"></div>
-        <div class="orb orb-3"></div>
-        <div class="ember ember-1"></div>
-        <div class="ember ember-2"></div>
-        <div class="ember ember-3"></div>
-        <div class="ember ember-4"></div>
-        <div class="ember ember-5"></div>
-    </div>
+    <div class="ambient-bg"></div>
 
     <!-- Status Bar -->
     <div class="status-bar">
@@ -224,6 +215,13 @@
                     <p>No Suspect Vessels Intercepted</p>
                     <span>Tap "Radar Scan" to sweep frequencies and lock onto units</span>
                 </div>
+            </div>
+
+            <!-- Device Pagination -->
+            <div class="pagination" id="devicePagination" style="display:none;">
+                <button class="page-btn" id="devicePrevBtn" onclick="prevDevicePage()" disabled>‹</button>
+                <span class="page-info" id="devicePageInfo">1 / 1</span>
+                <button class="page-btn" id="deviceNextBtn" onclick="nextDevicePage()" disabled>›</button>
             </div>
 
         </section>

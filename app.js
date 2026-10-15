@@ -41,8 +41,11 @@ const state = {
 
     currentSheetDevId: null,
     sheetSmsAll: [],
-    sheetPageIndex: 0,
-    sheetPageSize: 30,
+    // Device Pagination
+    filteredDevices: [],
+    devicePageIndex: 0,
+    devicePageSize: 40,
+    searchDebounceTimer: null,
 };
 
 // ---- Init ----
@@ -59,7 +62,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const searchInput = document.getElementById('deviceSearch');
     if (searchInput) {
-        searchInput.addEventListener('input', () => refreshDeviceList());
+        searchInput.addEventListener('input', () => {
+            if (state.searchDebounceTimer) clearTimeout(state.searchDebounceTimer);
+            state.searchDebounceTimer = setTimeout(() => {
+                state.devicePageIndex = 0;
+                refreshDeviceList();
+            }, 180);
+        });
     }
 
     // Prevent body scroll when sheet is open
@@ -223,26 +232,34 @@ async function fetchDevices() {
 function renderDeviceList(data) {
     const list = document.getElementById('deviceList');
     const empty = document.getElementById('deviceEmpty');
+    const pagination = document.getElementById('devicePagination');
     const search = (document.getElementById('deviceSearch')?.value || '').toLowerCase();
 
     // Remove old cards (keep empty state)
     list.querySelectorAll('.device-card').forEach(c => c.remove());
     state.devices = [];
+    state.filteredDevices = [];
     let online = 0, muted = 0;
 
     if (!data || Object.keys(data).length === 0) {
         empty.style.display = 'flex';
+        if (pagination) pagination.style.display = 'none';
         updateStats(0, 0, 0);
         return;
     }
 
     const sortedIds = Object.keys(data).sort();
-    const fragment = document.createDocumentFragment();
+    const matched = [];
 
     sortedIds.forEach(devId => {
         const isMuted = state.mutedDevices.has(devId);
         if (isMuted) muted++;
         const info = typeof data[devId] === 'object' ? data[devId] : { d_name: String(data[devId]) };
+
+        const isOnline = info.status === true || info.status === 'online';
+        if (isOnline) online++;
+
+        state.devices.push(devId);
 
         if (state.deviceFilter === 'active' && isMuted) return;
         if (state.deviceFilter === 'muted' && !isMuted) return;
@@ -255,9 +272,30 @@ function renderDeviceList(data) {
             if (!match) return;
         }
 
-        const isOnline = info.status === true || info.status === 'online';
-        if (isOnline) online++;
+        matched.push({ devId, model, isOnline, isMuted });
+    });
 
+    state.filteredDevices = matched;
+    updateStats(state.devices.length, online, muted);
+
+    if (matched.length === 0) {
+        empty.style.display = 'flex';
+        if (pagination) pagination.style.display = 'none';
+        return;
+    }
+
+    empty.style.display = 'none';
+    if (pagination) pagination.style.display = 'flex';
+
+    const total = matched.length;
+    const pages = Math.ceil(total / state.devicePageSize);
+    if (state.devicePageIndex >= pages) state.devicePageIndex = Math.max(0, pages - 1);
+
+    const start = state.devicePageIndex * state.devicePageSize;
+    const slice = matched.slice(start, start + state.devicePageSize);
+
+    const fragment = document.createDocumentFragment();
+    slice.forEach(({ devId, model, isOnline, isMuted }) => {
         const card = document.createElement('div');
         card.className = `device-card${isMuted ? ' muted-card' : ''}`;
         card.dataset.deviceId = devId;
@@ -276,19 +314,39 @@ function renderDeviceList(data) {
             </div>
         `;
 
-        // Tap card → open sheet
         card.addEventListener('click', (e) => {
             if (e.target.type === 'checkbox') return;
             openSheet(devId);
         });
 
         fragment.appendChild(card);
-        state.devices.push(devId);
     });
 
     list.appendChild(fragment);
-    empty.style.display = state.devices.length === 0 ? 'flex' : 'none';
-    updateStats(state.devices.length, online, muted);
+
+    const infoEl = document.getElementById('devicePageInfo');
+    const prevBtn = document.getElementById('devicePrevBtn');
+    const nextBtn = document.getElementById('deviceNextBtn');
+    if (infoEl) infoEl.textContent = `${state.devicePageIndex + 1} / ${pages}`;
+    if (prevBtn) prevBtn.disabled = state.devicePageIndex <= 0;
+    if (nextBtn) nextBtn.disabled = state.devicePageIndex >= pages - 1;
+}
+
+function prevDevicePage() {
+    if (state.devicePageIndex > 0) {
+        state.devicePageIndex--;
+        renderDeviceList(state.rawFullData);
+        document.getElementById('mainContent').scrollTop = 0;
+    }
+}
+
+function nextDevicePage() {
+    const pages = Math.ceil(state.filteredDevices.length / state.devicePageSize);
+    if (state.devicePageIndex < pages - 1) {
+        state.devicePageIndex++;
+        renderDeviceList(state.rawFullData);
+        document.getElementById('mainContent').scrollTop = 0;
+    }
 }
 
 function refreshDeviceList() {
